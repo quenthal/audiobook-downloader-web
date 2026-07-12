@@ -29,6 +29,8 @@ ALLOWED_HOSTS = {
     "www.storytel.com",
     "storytel.fi",
     "www.storytel.fi",
+    "nextory.com",
+    "www.nextory.com",
 }
 
 
