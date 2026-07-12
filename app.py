@@ -511,7 +511,6 @@ def publish_work_path() -> None:
         path
         for path in work_path.rglob("*")
         if path.is_file()
-        and path.name.lower() != "cover.jpg"
     ]
 
     if not files:
