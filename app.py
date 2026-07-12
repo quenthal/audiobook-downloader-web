@@ -3,12 +3,14 @@ from __future__ import annotations
 import json
 import os
 import queue
+import shutil
 import signal
 import subprocess
 import threading
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Generator
 from urllib.parse import urlparse
 
@@ -19,6 +21,7 @@ app = Flask(__name__)
 
 LIBRARY_PATH = os.environ.get("LIBRARY_PATH", "/library")
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "/config")
+WORK_PATH = os.environ.get("WORK_PATH", "/work")
 OUTPUT_TEMPLATE = os.environ.get(
     "OUTPUT_TEMPLATE",
     "{author}/{title}/{title}",
@@ -217,12 +220,12 @@ PAGE = r"""
 <body>
   <h1>Äänikirjalataaja</h1>
   <p class="subtitle">
-    Liitä Storytel-kirjan URL ja käynnistä lataus.
+    Liitä Storytel- tai Nextory-kirjan URL ja käynnistä lataus.
   </p>
 
   <section class="panel">
     <form id="download-form">
-      <label for="url">Storytel-osoite</label>
+      <label for="url">Storytel- tai Nextory-osoite</label>
 
       <input
         id="url"
@@ -413,7 +416,7 @@ def normalize_host(hostname: str | None) -> str:
     return hostname.rstrip(".").lower()
 
 
-def valid_storytel_url(value: str) -> bool:
+def valid_audiobook_url(value: str) -> bool:
     try:
         parsed = urlparse(value)
     except ValueError:
@@ -428,6 +431,7 @@ def valid_storytel_url(value: str) -> bool:
         host in ALLOWED_HOSTS
         or host.endswith(".storytel.com")
         or host.endswith(".storytel.fi")
+        or host.endswith(".nextory.com")
     )
 
 
@@ -469,6 +473,64 @@ def add_log(text: str) -> None:
     broadcast("log", text)
 
 
+def clear_work_path() -> None:
+    work_path = Path(WORK_PATH)
+    work_path.mkdir(parents=True, exist_ok=True)
+
+    for item in work_path.iterdir():
+        if item.is_dir() and not item.is_symlink():
+            shutil.rmtree(item)
+        else:
+            item.unlink(missing_ok=True)
+
+
+def publish_file(source: Path, destination: Path) -> None:
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
+    temporary = destination.with_name(
+        f".{destination.name}.uploading"
+    )
+
+    if temporary.exists() or temporary.is_symlink():
+        if temporary.is_dir() and not temporary.is_symlink():
+            shutil.rmtree(temporary)
+        else:
+            temporary.unlink()
+
+    shutil.copy2(source, temporary)
+    os.replace(temporary, destination)
+
+
+def publish_work_path() -> None:
+    work_path = Path(WORK_PATH)
+    library_path = Path(LIBRARY_PATH)
+
+    library_path.mkdir(parents=True, exist_ok=True)
+
+    files = [
+        path
+        for path in work_path.rglob("*")
+        if path.is_file()
+    ]
+
+    if not files:
+        raise RuntimeError(
+            "Lataus onnistui, mutta työtilasta ei löytynyt "
+            "julkaistavia tiedostoja."
+        )
+
+    add_log(
+        f"\nSiirretään {len(files)} valmista tiedostoa "
+        "kirjastoon.\n"
+    )
+
+    for source in files:
+        relative_path = source.relative_to(work_path)
+        destination = library_path / relative_path
+
+        publish_file(source, destination)
+        
+
 def run_download(url: str) -> None:
     username = os.environ.get("STORYTEL_USERNAME", "")
     password = os.environ.get("STORYTEL_PASSWORD", "")
@@ -491,15 +553,22 @@ def run_download(url: str) -> None:
     environment["PYTHONUNBUFFERED"] = "1"
     environment["TERM"] = "xterm-256color"
 
+    return_code: int | None = None
+
     try:
         os.makedirs(LIBRARY_PATH, exist_ok=True)
         os.makedirs(CONFIG_PATH, exist_ok=True)
+        os.makedirs(WORK_PATH, exist_ok=True)
 
-        add_log(f"$ audiobook-dl {url}\n\n")
+        clear_work_path()
+
+        add_log(f"$ audiobook-dl {url}\n")
+        add_log(f"Työtila: {WORK_PATH}\n")
+        add_log(f"Kirjasto: {LIBRARY_PATH}\n\n")
 
         process = subprocess.Popen(
             command,
-            cwd=LIBRARY_PATH,
+            cwd=WORK_PATH,
             env=environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -525,6 +594,20 @@ def run_download(url: str) -> None:
 
         with state.lock:
             state.return_code = return_code
+
+        if return_code == 0:
+            add_log(
+                "\nLataus ja muodostaminen valmistuivat. "
+                "Siirretään valmis kirja kirjastoon.\n"
+            )
+
+            publish_work_path()
+
+            add_log(
+                "\nValmis kirja siirrettiin kirjastoon.\n"
+            )
+
+        with state.lock:
             state.finished_at = time.time()
             state.running = False
             state.process = None
@@ -540,7 +623,8 @@ def run_download(url: str) -> None:
             add_log("\nLataus valmistui onnistuneesti.\n")
         elif state.status != "cancelled":
             add_log(
-                f"\nLataus päättyi virhekoodiin {return_code}.\n"
+                f"\nLataus päättyi virhekoodiin "
+                f"{return_code}.\n"
             )
 
     except Exception as error:
@@ -550,9 +634,21 @@ def run_download(url: str) -> None:
             state.finished_at = time.time()
             state.process = None
 
+            if return_code is not None:
+                state.return_code = return_code
+
         add_log(f"\nSisäinen virhe: {error}\n")
 
     finally:
+        try:
+            clear_work_path()
+            add_log("RAM-työtila tyhjennettiin.\n")
+        except Exception as cleanup_error:
+            add_log(
+                "Varoitus: RAM-työtilan tyhjennys "
+                f"epäonnistui: {cleanup_error}\n"
+            )
+
         broadcast("state", state_payload())
 
 
@@ -576,9 +672,9 @@ def api_start() -> tuple[Response, int] | Response:
     data = request.get_json(silent=True) or {}
     url = str(data.get("url", "")).strip()
 
-    if not valid_storytel_url(url):
+    if not valid_audiobook_url(url):
         return jsonify(
-            error="Anna kelvollinen Storytel-kirjan URL."
+            error="Anna kelvollinen Storytel- tai Nextory-kirjan URL."
         ), 400
 
     if not os.environ.get("STORYTEL_USERNAME"):
