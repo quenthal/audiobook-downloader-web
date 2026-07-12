@@ -29,14 +29,4 @@ EXPOSE 8098
 
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
-CMD [
-  "gunicorn",
-  "--chdir", "/app",
-  "--bind", "0.0.0.0:8098",
-  "--workers", "1",
-  "--threads", "4",
-  "--timeout", "0",
-  "--access-logfile", "-",
-  "--error-logfile", "-",
-  "app:app"
-]
+CMD ["gunicorn", "--chdir", "/app", "--bind", "0.0.0.0:8098", "--workers", "1", "--threads", "4", "--timeout", "0", "--access-logfile", "-", "--error-logfile", "-", "app:app"]
