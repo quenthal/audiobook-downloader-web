@@ -500,10 +500,7 @@ def create_nextory_m4b(
 
             cumulative_start_ms += duration_ms
 
-        output_path = os.path.join(
-            output_dir,
-            f"{safe_filename(audiobook.title)}.m4b"
-        )
+        output_path = f"{output_dir}.m4b"
 
         logging.book_update("Combining prepared chapters")
 
