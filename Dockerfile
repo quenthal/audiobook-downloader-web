@@ -21,6 +21,33 @@ RUN apt-get update \
     && apt-get purge -y --auto-remove git \
     && rm -rf /var/lib/apt/lists/*
 
+COPY patches/nextory.py /tmp/nextory.py
+COPY patches/networking.py /tmp/networking.py
+COPY patches/download.py /tmp/download.py
+
+RUN python3 - <<'PY'
+from pathlib import Path
+import audiobookdl
+
+package = Path(audiobookdl.__file__).resolve().parent
+
+replacements = {
+    Path("/tmp/nextory.py"): package / "sources" / "nextory.py",
+    Path("/tmp/networking.py"): package / "sources" / "source" / "networking.py",
+    Path("/tmp/download.py"): package / "output" / "download.py",
+}
+
+for source, destination in replacements.items():
+    destination.write_bytes(source.read_bytes())
+    source.unlink()
+    print(f"Installed patch: {destination}")
+PY
+
+RUN python3 -m py_compile \
+    "$(python3 -c 'import audiobookdl, pathlib; print(pathlib.Path(audiobookdl.__file__).resolve().parent / "sources/nextory.py")')" \
+    "$(python3 -c 'import audiobookdl, pathlib; print(pathlib.Path(audiobookdl.__file__).resolve().parent / "sources/source/networking.py")')" \
+    "$(python3 -c 'import audiobookdl, pathlib; print(pathlib.Path(audiobookdl.__file__).resolve().parent / "output/download.py")')"
+
 COPY app.py /app/app.py
 
 WORKDIR /library
