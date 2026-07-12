@@ -50,6 +50,8 @@ RUN python3 -m py_compile \
 
 COPY app.py /app/app.py
 
+RUN mkdir -p /work /library
+
 WORKDIR /library
 
 EXPOSE 8098
