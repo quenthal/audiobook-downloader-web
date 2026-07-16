@@ -67,216 +67,421 @@ PAGE = r"""
   >
   <title>Äänikirjalataaja</title>
 
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='icon.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon.png') }}">
+  <meta name="theme-color" content="#15181c">
+
   <style>
     :root {
-      color-scheme: light dark;
+      color-scheme: dark;
       font-family:
         Inter, system-ui, -apple-system, BlinkMacSystemFont,
         "Segoe UI", sans-serif;
+
+      --bg: #111418;
+      --bg-soft: #171b20;
+      --panel: #1a1f25;
+      --panel-2: #15191e;
+      --line: #2d353d;
+      --line-soft: #3a444d;
+
+      --text: #f2ede3;
+      --muted: #b9b2a5;
+
+      --accent: #8a9464;
+      --accent-strong: #a4ae79;
+      --accent-soft: rgba(138, 148, 100, 0.18);
+
+      --warm: #c77361;
+      --warm-strong: #db8773;
+      --warm-soft: rgba(199, 115, 97, 0.16);
+
+      --danger: #b95656;
+      --danger-strong: #d06f6f;
+
+      --shadow:
+        0 20px 50px rgba(0, 0, 0, 0.32),
+        0 2px 12px rgba(0, 0, 0, 0.18);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      background:
+        radial-gradient(
+          circle at top,
+          rgba(138, 148, 100, 0.10),
+          transparent 30%
+        ),
+        radial-gradient(
+          circle at top right,
+          rgba(199, 115, 97, 0.08),
+          transparent 24%
+        ),
+        var(--bg);
+      color: var(--text);
     }
 
     body {
-      max-width: 960px;
+      max-width: 780px;
       margin: 0 auto;
-      padding: 24px;
-      background: Canvas;
-      color: CanvasText;
+      padding: 28px 18px 36px;
+    }
+
+    .hero {
+      display: flex;
+      gap: 18px;
+      align-items: center;
+      background:
+        linear-gradient(
+          180deg,
+          rgba(255,255,255,0.02),
+          rgba(255,255,255,0.00)
+        ),
+        var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .hero-icon {
+      width: 78px;
+      height: 78px;
+      flex: 0 0 78px;
+      border-radius: 18px;
+      display: block;
+      background: #101315;
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.03),
+        0 10px 24px rgba(0,0,0,0.22);
+    }
+
+    .hero-copy {
+      min-width: 0;
     }
 
     h1 {
-      margin-bottom: 4px;
+      margin: 0 0 6px 0;
+      font-size: clamp(1.55rem, 2.3vw, 2rem);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
     }
 
     .subtitle {
-      margin-top: 0;
-      opacity: 0.72;
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .grid {
+      display: grid;
+      gap: 18px;
+      margin-top: 18px;
     }
 
     .panel {
-      border: 1px solid color-mix(
-        in srgb,
-        CanvasText 20%,
-        transparent
-      );
-      border-radius: 12px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 18px;
       padding: 18px;
-      margin-top: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .panel h2 {
+      margin: 0 0 14px 0;
+      font-size: 1rem;
+      font-weight: 750;
+      letter-spacing: -0.01em;
     }
 
     label {
       display: block;
-      font-weight: 650;
-      margin-bottom: 8px;
+      font-weight: 700;
+      margin-bottom: 9px;
+      color: var(--text);
     }
 
     input {
-      box-sizing: border-box;
       width: 100%;
-      padding: 12px;
-      border: 1px solid color-mix(
-        in srgb,
-        CanvasText 28%,
-        transparent
-      );
-      border-radius: 8px;
-      font-size: 16px;
+      padding: 13px 14px;
+      border: 1px solid var(--line-soft);
+      border-radius: 12px;
+      font-size: 15px;
+      background: #101419;
+      color: var(--text);
+      outline: none;
+      transition:
+        border-color 0.18s ease,
+        box-shadow 0.18s ease,
+        background 0.18s ease;
+    }
+
+    input::placeholder {
+      color: #8f948f;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px var(--accent-soft);
+      background: #0f1317;
     }
 
     .buttons {
       display: flex;
       gap: 10px;
-      margin-top: 12px;
+      margin-top: 14px;
       flex-wrap: wrap;
     }
 
     button {
-      border: 0;
-      border-radius: 8px;
-      padding: 11px 18px;
+      border: 1px solid transparent;
+      border-radius: 12px;
+      padding: 11px 16px;
       cursor: pointer;
-      font-weight: 650;
+      font-weight: 750;
+      font-size: 14px;
+      transition:
+        transform 0.08s ease,
+        opacity 0.15s ease,
+        border-color 0.15s ease,
+        background 0.15s ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
     }
 
     button:disabled {
       cursor: not-allowed;
-      opacity: 0.55;
+      opacity: 0.45;
+      transform: none;
     }
 
     .primary {
-      background: #2f7d32;
-      color: white;
+      background: linear-gradient(180deg, var(--accent-strong), var(--accent));
+      color: #11140f;
+      border-color: rgba(255,255,255,0.08);
     }
 
     .danger {
-      background: #a93232;
-      color: white;
+      background: linear-gradient(180deg, var(--warm-strong), var(--warm));
+      color: #fff6f2;
+      border-color: rgba(255,255,255,0.06);
     }
 
     .secondary {
-      background: color-mix(
-        in srgb,
-        CanvasText 12%,
-        Canvas
-      );
-      color: CanvasText;
+      background: #232931;
+      color: var(--text);
+      border-color: var(--line-soft);
+    }
+
+    .error {
+      color: #f0a6a6;
+      min-height: 1.4em;
+      margin-top: 12px;
+      line-height: 1.4;
     }
 
     .status-row {
       display: flex;
-      gap: 12px;
+      gap: 10px;
       align-items: center;
       flex-wrap: wrap;
+      margin-bottom: 14px;
     }
 
-    .badge {
-      display: inline-block;
-      border-radius: 999px;
-      padding: 5px 11px;
+    .status-label {
+      color: var(--muted);
       font-weight: 700;
     }
 
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      border-radius: 999px;
+      padding: 6px 12px;
+      font-weight: 800;
+      border: 1px solid transparent;
+      letter-spacing: 0.01em;
+    }
+
     .idle {
-      background: #7774;
+      background: rgba(148, 158, 168, 0.14);
+      border-color: rgba(148, 158, 168, 0.20);
+      color: #d5dbe0;
     }
 
     .running {
-      background: #b8860b44;
+      background: var(--warm-soft);
+      border-color: rgba(199, 115, 97, 0.30);
+      color: #ffd6cb;
     }
 
     .success {
-      background: #20802044;
+      background: var(--accent-soft);
+      border-color: rgba(138, 148, 100, 0.32);
+      color: #d9e3b8;
     }
 
     .failed,
     .cancelled {
-      background: #a0202044;
+      background: rgba(185, 86, 86, 0.16);
+      border-color: rgba(185, 86, 86, 0.32);
+      color: #ffcdcd;
+    }
+
+    #current-url {
+      color: var(--muted);
+      word-break: break-word;
+      font-size: 0.95rem;
     }
 
     pre {
-      box-sizing: border-box;
       height: 430px;
       overflow: auto;
       white-space: pre-wrap;
       word-break: break-word;
-      background: #111;
-      color: #ddd;
-      border-radius: 8px;
-      padding: 14px;
-      margin-bottom: 0;
+      background: #0d1013;
+      color: #ddd9cf;
+      border: 1px solid #242b33;
+      border-radius: 14px;
+      padding: 14px 15px;
+      margin: 0;
       font-family:
         ui-monospace, SFMono-Regular, Consolas, monospace;
       font-size: 13px;
-      line-height: 1.42;
+      line-height: 1.48;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.01);
     }
 
-    .error {
-      color: #d43c3c;
-      min-height: 1.4em;
+    .footer-note {
       margin-top: 10px;
+      color: #8e958f;
+      font-size: 0.88rem;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 16px 12px 24px;
+      }
+
+      .hero {
+        align-items: flex-start;
+      }
+
+      .hero-icon {
+        width: 64px;
+        height: 64px;
+        flex-basis: 64px;
+        border-radius: 14px;
+      }
+
+      .buttons {
+        flex-direction: column;
+      }
+
+      .buttons button {
+        width: 100%;
+      }
+
+      pre {
+        height: 360px;
+      }
     }
   </style>
 </head>
 
 <body>
-  <h1>Äänikirjalataaja</h1>
-  <p class="subtitle">
-    Liitä Storytel- tai Nextory-kirjan URL ja käynnistä lataus.
-  </p>
+  <header class="hero">
+    <img
+      class="hero-icon"
+      src="{{ url_for('static', filename='icon.png') }}"
+      alt="Äänikirjalataajan kuvake"
+    >
 
-  <section class="panel">
-    <form id="download-form">
-      <label for="url">Storytel- tai Nextory-osoite</label>
+    <div class="hero-copy">
+      <h1>Äänikirjalataaja</h1>
+      <p class="subtitle">
+        Lataa Storytel- tai Nextory-kirjoja suoraan kirjastoon.
+        Tyyliltään tumma, yksinkertainen ja tehty juuri tätä yhtä tehtävää varten.
+      </p>
+    </div>
+  </header>
 
-      <input
-        id="url"
-        name="url"
-        type="url"
-        inputmode="url"
-        autocomplete="off"
-        placeholder="https://www.storytel.com/fi/books/..."
-        required
-      >
+  <main class="grid">
+    <section class="panel">
+      <h2>Uusi lataus</h2>
 
-      <div class="buttons">
-        <button
-          id="start"
-          class="primary"
-          type="submit"
+      <form id="download-form">
+        <label for="url">Kirjan URL</label>
+
+        <input
+          id="url"
+          name="url"
+          type="url"
+          inputmode="url"
+          autocomplete="off"
+          placeholder="https://www.storytel.com/fi/books/..."
+          required
         >
-          Lataa
-        </button>
 
-        <button
-          id="cancel"
-          class="danger"
-          type="button"
-          disabled
-        >
-          Keskeytä
-        </button>
+        <div class="buttons">
+          <button
+            id="start"
+            class="primary"
+            type="submit"
+          >
+            Lataa kirja
+          </button>
 
-        <button
-          id="clear"
-          class="secondary"
-          type="button"
-        >
-          Tyhjennä loki
-        </button>
+          <button
+            id="cancel"
+            class="danger"
+            type="button"
+            disabled
+          >
+            Keskeytä
+          </button>
+
+          <button
+            id="clear"
+            class="secondary"
+            type="button"
+          >
+            Tyhjennä loki
+          </button>
+        </div>
+
+        <div id="error" class="error"></div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <h2>Tilanne</h2>
+
+      <div class="status-row">
+        <span class="status-label">Tila</span>
+        <span id="status" class="badge idle">Valmis</span>
+        <span id="current-url"></span>
       </div>
 
-      <div id="error" class="error"></div>
-    </form>
-  </section>
-
-  <section class="panel">
-    <div class="status-row">
-      <strong>Tila:</strong>
-      <span id="status" class="badge idle">Valmis</span>
-      <span id="current-url"></span>
-    </div>
-
-    <pre id="log"></pre>
-  </section>
+      <pre id="log"></pre>
+      <div class="footer-note">
+        Latauslokit näkyvät tässä reaaliajassa.
+      </div>
+    </section>
+  </main>
 
   <script>
     const form = document.getElementById("download-form");
@@ -407,7 +612,6 @@ PAGE = r"""
 </body>
 </html>
 """
-
 
 def normalize_host(hostname: str | None) -> str:
     if not hostname:
