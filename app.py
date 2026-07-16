@@ -414,7 +414,6 @@ PAGE = r"""
       <h1>Äänikirjalataaja</h1>
       <p class="subtitle">
         Lataa Storytel- tai Nextory-kirjoja suoraan kirjastoon.
-        Tyyliltään tumma, yksinkertainen ja tehty juuri tätä yhtä tehtävää varten.
       </p>
     </div>
   </header>
