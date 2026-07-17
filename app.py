@@ -12,7 +12,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Generator
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
+from urllib.request import Request, urlopen
 
 from flask import Flask, Response, jsonify, render_template_string, request
 
@@ -36,6 +37,14 @@ ALLOWED_HOSTS = {
     "www.nextory.com",
 }
 
+STORYTEL_SEARCH_URL = (
+    "https://api.storytel.net/search/client/web"
+)
+
+STORYTEL_STORE = os.environ.get(
+    "STORYTEL_STORE",
+    "STHP-FI",
+)
 
 @dataclass
 class DownloadState:
@@ -370,6 +379,63 @@ PAGE = r"""
       color: #8e958f;
       font-size: 0.88rem;
     }
+    
+    .search-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+    }
+    
+    .search-results {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    
+    .search-empty {
+      color: var(--muted);
+      padding: 12px 0;
+    }
+    
+    .search-card {
+      display: grid;
+      grid-template-columns: 72px 1fr auto;
+      gap: 14px;
+      align-items: center;
+      padding: 12px;
+      background: #101419;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+    
+    .search-cover {
+      width: 72px;
+      height: 72px;
+      object-fit: cover;
+      border-radius: 10px;
+      background: #242a30;
+    }
+    
+    .search-book-title {
+      margin: 0 0 5px;
+      font-size: 1rem;
+      line-height: 1.25;
+    }
+    
+    .search-meta {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+    
+    .search-select {
+      white-space: nowrap;
+    }
+    
+    .search-loading {
+      color: var(--accent-strong);
+      padding: 12px 0;
+    }
 
     @media (max-width: 640px) {
       body {
@@ -394,7 +460,25 @@ PAGE = r"""
       .buttons button {
         width: 100%;
       }
-
+          
+      .search-row {
+        grid-template-columns: 1fr;
+      }
+    
+      .search-card {
+        grid-template-columns: 58px 1fr;
+      }
+    
+      .search-cover {
+        width: 58px;
+        height: 58px;
+      }
+    
+      .search-select {
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+      
       pre {
         height: 360px;
       }
@@ -419,6 +503,36 @@ PAGE = r"""
   </header>
 
   <main class="grid">
+    <section class="panel">
+      <h2>Hae Storytelistä</h2>
+    
+      <form id="search-form">
+        <label for="search-query">
+          Kirjan nimi, kirjailija tai avainsana
+        </label>
+    
+        <div class="search-row">
+          <input
+            id="search-query"
+            type="search"
+            autocomplete="off"
+            placeholder="Esimerkiksi Sapkowski"
+          >
+    
+          <button
+            id="search-button"
+            class="secondary"
+            type="submit"
+          >
+            Hae
+          </button>
+        </div>
+    
+        <div id="search-error" class="error"></div>
+      </form>
+    
+      <div id="search-results" class="search-results"></div>
+    </section>
     <section class="panel">
       <h2>Uusi lataus</h2>
 
@@ -483,6 +597,11 @@ PAGE = r"""
   </main>
 
   <script>
+    const searchForm = document.getElementById("search-form");
+    const searchQuery = document.getElementById("search-query");
+    const searchButton = document.getElementById("search-button");
+    const searchError = document.getElementById("search-error");
+    const searchResults = document.getElementById("search-results");
     const form = document.getElementById("download-form");
     const urlInput = document.getElementById("url");
     const startButton = document.getElementById("start");
@@ -527,6 +646,104 @@ PAGE = r"""
       logBox.scrollTop = logBox.scrollHeight;
     }
 
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+    
+    function renderSearchResults(results) {
+      searchResults.textContent = "";
+    
+      if (results.length === 0) {
+        searchResults.innerHTML =
+          '<div class="search-empty">Ei äänikirjatuloksia.</div>';
+        return;
+      }
+    
+      for (const book of results) {
+        const card = document.createElement("article");
+        card.className = "search-card";
+    
+        const authors = (book.authors || []).join(", ");
+        const narrators = (book.narrators || []).join(", ");
+    
+        const hours = book.duration?.hours || 0;
+        const minutes = book.duration?.minutes || 0;
+    
+        const durationText =
+          hours > 0
+            ? `${hours} h ${minutes} min`
+            : `${minutes} min`;
+    
+        const ratingText =
+          book.rating !== null && book.rating !== undefined
+            ? ` · ★ ${Number(book.rating).toFixed(1)}`
+            : "";
+    
+        const narratorText =
+          narrators
+            ? `<div>Lukija: ${escapeHtml(narrators)}</div>`
+            : "";
+    
+        const coverHtml = book.cover
+          ? `
+            <img
+              class="search-cover"
+              src="${escapeHtml(book.cover)}"
+              alt=""
+              loading="lazy"
+            >
+          `
+          : '<div class="search-cover"></div>';
+    
+        card.innerHTML = `
+          ${coverHtml}
+    
+          <div>
+            <h3 class="search-book-title">
+              ${escapeHtml(book.title)}
+            </h3>
+    
+            <div class="search-meta">
+              <div>${escapeHtml(authors)}</div>
+              ${narratorText}
+              <div>
+                ${escapeHtml(durationText)}
+                ${escapeHtml(ratingText)}
+              </div>
+            </div>
+          </div>
+    
+          <button
+            class="primary search-select"
+            type="button"
+          >
+            Valitse
+          </button>
+        `;
+    
+        card
+          .querySelector(".search-select")
+          .addEventListener("click", () => {
+            urlInput.value = book.url;
+            urlInput.focus();
+    
+            document
+              .getElementById("download-form")
+              .scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+              });
+          });
+    
+        searchResults.appendChild(card);
+      }
+    }
+    
     async function refreshStatus() {
       const response = await fetch("/api/status");
       const data = await response.json();
@@ -536,6 +753,41 @@ PAGE = r"""
       logBox.scrollTop = logBox.scrollHeight;
     }
 
+    searchForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+    
+      const query = searchQuery.value.trim();
+    
+      searchError.textContent = "";
+      searchResults.innerHTML =
+        '<div class="search-loading">Haetaan…</div>';
+    
+      searchButton.disabled = true;
+    
+      try {
+        const response = await fetch(
+          `/api/search?q=${encodeURIComponent(query)}`
+        );
+    
+        const data = await response.json();
+    
+        if (!response.ok) {
+          searchResults.textContent = "";
+          searchError.textContent =
+            data.error || "Haku epäonnistui.";
+          return;
+        }
+    
+        renderSearchResults(data.results || []);
+      } catch (error) {
+        searchResults.textContent = "";
+        searchError.textContent =
+          "Hakupalveluun ei saatu yhteyttä.";
+      } finally {
+        searchButton.disabled = false;
+      }
+    });
+    
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       errorBox.textContent = "";
@@ -637,6 +889,81 @@ def valid_audiobook_url(value: str) -> bool:
         or host.endswith(".nextory.com")
     )
 
+def search_storytel(query: str) -> list[dict]:
+    parameters = urlencode({
+        "query": query,
+        "store": STORYTEL_STORE,
+        "searchFor": "omni",
+        "includeFormats": "abook",
+    })
+
+    request_url = f"{STORYTEL_SEARCH_URL}?{parameters}"
+
+    search_request = Request(
+        request_url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "AudiobookDownloader/1.0",
+        },
+    )
+
+    with urlopen(search_request, timeout=15) as response:
+        payload = json.load(response)
+
+    results: list[dict] = []
+
+    for item in payload.get("items", []):
+        if item.get("resultType") != "book":
+            continue
+
+        audiobook_format = next(
+            (
+                item_format
+                for item_format in item.get("formats", [])
+                if item_format.get("type") == "abook"
+                and item_format.get("isReleased") is True
+            ),
+            None,
+        )
+
+        if audiobook_format is None:
+            continue
+
+        title = item.get("title")
+        share_url = item.get("shareUrl")
+
+        if not title or not share_url:
+            continue
+
+        cover = audiobook_format.get("cover") or {}
+        duration = item.get("duration") or {}
+
+        results.append({
+            "title": title,
+            "authors": [
+                author.get("name", "")
+                for author in item.get("authors", [])
+                if author.get("name")
+            ],
+            "narrators": [
+                narrator.get("name", "")
+                for narrator in item.get("narrators", [])
+                if narrator.get("name")
+            ],
+            "url": share_url,
+            "cover": cover.get("url", ""),
+            "language": item.get("language", ""),
+            "rating": item.get("averageRating"),
+            "duration": {
+                "hours": int(duration.get("hours") or 0),
+                "minutes": int(duration.get("minutes") or 0),
+            },
+        })
+
+        if len(results) >= 20:
+            break
+
+    return results
 
 def broadcast(event_type: str, payload: object) -> None:
     message = (
@@ -869,6 +1196,33 @@ def api_status() -> Response:
 
     return jsonify(payload)
 
+@app.get("/api/search")
+def api_search() -> tuple[Response, int] | Response:
+    query = request.args.get("q", "").strip()
+
+    if len(query) < 2:
+        return jsonify(
+            error="Kirjoita vähintään kaksi merkkiä."
+        ), 400
+
+    if len(query) > 100:
+        return jsonify(
+            error="Hakusana on liian pitkä."
+        ), 400
+
+    try:
+        results = search_storytel(query)
+    except Exception:
+        app.logger.exception("Storytel search failed")
+
+        return jsonify(
+            error="Storytel-haku epäonnistui."
+        ), 502
+
+    return jsonify(
+        query=query,
+        results=results,
+    )
 
 @app.post("/api/start")
 def api_start() -> tuple[Response, int] | Response:
